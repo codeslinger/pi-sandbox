@@ -40,6 +40,10 @@ func sandboxCommand(p *policy) (*exec.Cmd, error) {
 
 	cmd := exec.Command(bwrap, args...)
 	cmd.Dir = p.Workdir
+	// bwrap passes its environment through; extra entries such as GH_TOKEN
+	// go here rather than in --setenv so they never appear in the command
+	// line (visible in ps and --dry-run output).
+	cmd.Env = append(os.Environ(), p.Env...)
 	return cmd, nil
 }
 

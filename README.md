@@ -39,12 +39,32 @@ pi-sandbox --exec bash             # open a shell in the same sandbox (debugging
 
 Inside the sandbox `PI_SANDBOXED=1` is set.
 
+## GitHub CLI
+
+`gh` works inside the sandbox. Its config directory (`$GH_CONFIG_DIR`,
+`$XDG_CONFIG_HOME/gh` or `~/.config/gh`) is exposed read-only. gh normally keeps
+its token in the macOS keychain, which the sandbox cannot reach. So before it
+starts the session, pi-sandbox runs `gh auth token` on the host and passes the
+result in as `GH_TOKEN`. The token is set in the environment only. It never
+appears on the command line or in `--dry-run` output (`-v` shows just the
+variable name).
+
+- If `GH_TOKEN` or `GITHUB_TOKEN` is already set, it is inherited unchanged
+  and `gh auth token` is not run.
+- If gh is not installed or not logged in, the session starts without a token.
+- `git push` over HTTPS works when gh is the git credential helper
+  (`gh auth setup-git`). SSH remotes do not work, because `~/.ssh` and the
+  ssh-agent socket are not reachable. Set `gh config set git_protocol https`
+  so `gh repo create --push` and `gh repo clone` use HTTPS.
+- The gh config directory is read-only, so commands that change it
+  (`gh auth login`, `gh config set`) must run outside the sandbox.
+
 ## What the session can access
 
 | Access | Paths |
 |--------|-------|
 | read-write | current directory; Pi config dir (`$PI_CODING_AGENT_DIR` or `~/.pi/agent`) for sessions, auth and lock files; `$PI_CODING_AGENT_SESSION_DIR` if set; a private temp dir (`TMPDIR`) |
-| read-only | system dirs (`/usr`, `/bin`, `/etc`, `/System`, `/Library/Developer`, ...); every `$PATH` directory and its install prefix (e.g. `/opt/homebrew` for `/opt/homebrew/bin`); the targets of symlinks in `$PATH` dirs; toolchain homes (`~/.nvm`, `~/.pyenv`, `~/.cargo`, `~/.rustup`, ...); `~/.agents` (skills); `~/.gitconfig`, `~/.config/git`, `~/.config/mcp` |
+| read-only | system dirs (`/usr`, `/bin`, `/etc`, `/System`, `/Library/Developer`, ...); every `$PATH` directory and its install prefix (e.g. `/opt/homebrew` for `/opt/homebrew/bin`); the targets of symlinks in `$PATH` dirs; toolchain homes (`~/.nvm`, `~/.pyenv`, `~/.cargo`, `~/.rustup`, ...); `~/.agents` (skills); `~/.gitconfig`, `~/.config/git`, `~/.config/mcp`; gh config dir (`~/.config/gh`) |
 | network | Allowed for TCP/UDP so Pi can reach LLM providers. Unix-domain sockets work only inside the writable dirs, so host daemons such as `docker.sock` and `ssh-agent` are not reachable. |
 | denied | everything else, including the rest of `$HOME` (`~/.ssh`, `~/.aws`, shell rc files, other projects) |
 
@@ -86,5 +106,9 @@ via `TIOCSTI`.
   changes before you run them unsandboxed.
 - **The network is open.** Anything the session can read, it can send
   somewhere. The default read set is kept small for this reason.
+- **The session holds your GitHub token.** It can do anything the token
+  allows on your GitHub account (push, create or delete repos, open PRs), and
+  it could send the token somewhere else. To limit this, pass a fine-grained
+  token scoped to the repos you need: `GH_TOKEN=github_pat_... pi-sandbox`.
 - Language caches outside the defaults (e.g. `~/.cache/go-build`, `~/.npm`)
   are not writable. Builds that need them either fail or need `--rw`.

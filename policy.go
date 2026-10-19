@@ -20,6 +20,10 @@ type policy struct {
 	Args      []string // program arguments
 	Home      string
 
+	// Env holds extra KEY=VALUE entries for the sandboxed process, on top of
+	// the inherited environment (e.g. GH_TOKEN). Values may be secrets.
+	Env []string
+
 	// TmpDir is a private temporary directory created for the session on
 	// platforms that cannot mount a fresh /tmp (macOS). It is removed on exit.
 	TmpDir string
@@ -38,6 +42,11 @@ func (p *policy) describe(w io.Writer) {
 	}
 	for _, d := range p.ReadOnly {
 		fmt.Fprintln(w, "  ro", d)
+	}
+	for _, kv := range p.Env {
+		// Print names only; values may be secrets.
+		name, _, _ := strings.Cut(kv, "=")
+		fmt.Fprintln(w, "  env", name)
 	}
 }
 
@@ -109,6 +118,7 @@ func buildPolicy(opts *options) (*policy, error) {
 	for _, rel := range homeReadOnlyPaths {
 		ro.add(filepath.Join(home, rel))
 	}
+	ro.add(ghConfigDir(home))
 	for _, d := range opts.readOnly {
 		d = expandPath(d, home)
 		if !exists(d) {
@@ -126,6 +136,7 @@ func buildPolicy(opts *options) (*policy, error) {
 		}
 	}
 	p.ReadOnly = roList
+	p.Env = githubEnv()
 
 	if err := preparePlatform(p); err != nil {
 		p.cleanup()

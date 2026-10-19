@@ -60,7 +60,8 @@ func sandboxCommand(p *policy) (*exec.Cmd, error) {
 
 	cmd := exec.Command(sandboxExec, args...)
 	cmd.Dir = p.Workdir
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(os.Environ(), p.Env...)
+	cmd.Env = append(cmd.Env,
 		"TMPDIR="+p.TmpDir+"/",
 		"PI_SANDBOXED=1",
 	)
