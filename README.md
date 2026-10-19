@@ -53,20 +53,35 @@ variable name).
   and `gh auth token` is not run.
 - If gh is not installed or not logged in, the session starts without a token.
 - `git push` over HTTPS works when gh is the git credential helper
-  (`gh auth setup-git`). SSH remotes do not work, because `~/.ssh` and the
-  ssh-agent socket are not reachable. Set `gh config set git_protocol https`
-  so `gh repo create --push` and `gh repo clone` use HTTPS.
+  (`gh auth setup-git`). SSH remotes work too (see [SSH](#ssh)).
 - The gh config directory is read-only, so commands that change it
   (`gh auth login`, `gh config set`) must run outside the sandbox.
+
+## SSH
+
+`~/.ssh` is exposed read-only, so git over SSH (`git@github.com:...`) and SSH
+commit signing (`gpg.format = ssh`) work from the key files on disk.
+
+- **No ssh-agent.** Agent and ControlMaster sockets are blocked, including
+  those inside `~/.ssh`. On macOS the Seatbelt network rules block them. On
+  Linux each socket found in `~/.ssh` at startup is covered with `/dev/null`.
+  Keys that exist only in an agent (1Password, Secretive, hardware tokens)
+  are not available. A key with a passphrase asks for it on every use.
+- `user.signingkey` may name the private key or its `.pub` file; ssh-keygen
+  loads the private key next to the `.pub`.
+- `known_hosts` is read-only. ssh cannot record new host keys, so connect
+  once outside the sandbox to add a new host.
+- `ControlMaster` cannot create sockets in `~/.ssh`. ssh warns and connects
+  without multiplexing.
 
 ## What the session can access
 
 | Access | Paths |
 |--------|-------|
 | read-write | current directory; Pi config dir (`$PI_CODING_AGENT_DIR` or `~/.pi/agent`) for sessions, auth and lock files; `$PI_CODING_AGENT_SESSION_DIR` if set; a private temp dir (`TMPDIR`) |
-| read-only | system dirs (`/usr`, `/bin`, `/etc`, `/System`, `/Library/Developer`, ...); every `$PATH` directory and its install prefix (e.g. `/opt/homebrew` for `/opt/homebrew/bin`); the targets of symlinks in `$PATH` dirs; toolchain homes (`~/.nvm`, `~/.pyenv`, `~/.cargo`, `~/.rustup`, ...); `~/.agents` (skills); `~/.gitconfig`, `~/.config/git`, `~/.config/mcp`; gh config dir (`~/.config/gh`) |
+| read-only | system dirs (`/usr`, `/bin`, `/etc`, `/System`, `/Library/Developer`, ...); every `$PATH` directory and its install prefix (e.g. `/opt/homebrew` for `/opt/homebrew/bin`); the targets of symlinks in `$PATH` dirs; toolchain homes (`~/.nvm`, `~/.pyenv`, `~/.cargo`, `~/.rustup`, ...); `~/.agents` (skills); `~/.ssh`; `~/.gitconfig`, `~/.config/git`, `~/.config/mcp`; gh config dir (`~/.config/gh`) |
 | network | Allowed for TCP/UDP so Pi can reach LLM providers. Unix-domain sockets work only inside the writable dirs, so host daemons such as `docker.sock` and `ssh-agent` are not reachable. |
-| denied | everything else, including the rest of `$HOME` (`~/.ssh`, `~/.aws`, shell rc files, other projects) |
+| denied | everything else, including the rest of `$HOME` (`~/.aws`, shell rc files, other projects) |
 
 The automatic `$PATH` expansion never exposes `/`, `$HOME` itself, or broad
 data directories such as `~/.local`, `~/.config`, and `~/Library`. The tool
@@ -110,5 +125,9 @@ via `TIOCSTI`.
   allows on your GitHub account (push, create or delete repos, open PRs), and
   it could send the token somewhere else. To limit this, pass a fine-grained
   token scoped to the repos you need: `GH_TOKEN=github_pat_... pi-sandbox`.
+- **The session can read your SSH private keys.** With the open network it
+  could copy them elsewhere, and use them anywhere they are authorized, not
+  only on GitHub. Prefer keys with a passphrase, or a separate key used only
+  for git.
 - Language caches outside the defaults (e.g. `~/.cache/go-build`, `~/.npm`)
   are not writable. Builds that need them either fail or need `--rw`.

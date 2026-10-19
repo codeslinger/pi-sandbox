@@ -112,6 +112,18 @@ func bwrapArgs(p *policy) []string {
 		args = append(args, flag, r, r)
 	}
 
+	// A read-only bind does not stop connect() on a Unix socket, so an
+	// ssh-agent or ControlMaster socket in ~/.ssh would hand the session the
+	// host's agent or live SSH connections. Cover each socket with /dev/null
+	// (macOS gets the same result from the Seatbelt network rules). Sockets
+	// created after the sandbox starts are not covered.
+	sshDir := filepath.Join(p.Home, ".ssh")
+	if coveredBy(canonical(sshDir), placed) {
+		for _, s := range socketsUnder(canonical(sshDir)) {
+			args = append(args, "--ro-bind", "/dev/null", s)
+		}
+	}
+
 	links := newPathSet()
 	for _, o := range originals {
 		for _, l := range symlinkChain(o) {

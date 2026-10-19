@@ -1,9 +1,11 @@
 package main
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -89,5 +91,36 @@ func TestSymlinkChain(t *testing.T) {
 	got := symlinkChain(filepath.Join(link, "bin"))
 	if !reflect.DeepEqual(got, []string{link}) {
 		t.Errorf("symlinkChain = %v, want [%s]", got, link)
+	}
+}
+
+func TestSocketsUnder(t *testing.T) {
+	// Short base dir: Unix socket paths are limited to ~104 bytes on macOS.
+	root, err := os.MkdirTemp("/tmp", "pis")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(root)
+	if err := os.MkdirAll(filepath.Join(root, "agent"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "id_ed25519"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, rel := range []string{"agent.sock", "agent/cm-1"} {
+		p := filepath.Join(root, rel)
+		l, err := net.Listen("unix", p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		want = append(want, p)
+	}
+	got := socketsUnder(root)
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("socketsUnder = %v, want %v", got, want)
 	}
 }

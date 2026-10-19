@@ -146,11 +146,12 @@ func buildPolicy(opts *options) (*policy, error) {
 }
 
 // homeReadOnlyPaths are paths below $HOME exposed read-only when they exist:
-// global agent skills, git and MCP config, and common language toolchain homes that
-// PATH shims depend on.
+// global agent skills, git, SSH and MCP config, and common language toolchain
+// homes that PATH shims depend on.
 var homeReadOnlyPaths = []string{
 	".agents",
 	".gitconfig",
+	".ssh", // keys, config, known_hosts: git over SSH and SSH commit signing
 	".gitignore_global",
 	".config/git",
 	".config/mcp", // MCP server config shared across agents
@@ -351,6 +352,22 @@ func envPath(key, def, home string) string {
 		return expandPath(v, home)
 	}
 	return def
+}
+
+// socketsUnder returns the Unix-domain sockets inside dir, without following
+// symlinks. Used to hide ssh-agent and ControlMaster sockets in ~/.ssh.
+func socketsUnder(dir string) []string {
+	var out []string
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable entries are skipped, not fatal
+		}
+		if d.Type()&os.ModeSocket != 0 {
+			out = append(out, p)
+		}
+		return nil
+	})
+	return out
 }
 
 func exists(p string) bool {
