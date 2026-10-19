@@ -8,6 +8,11 @@ directory.
 
 ## Install
 
+Prebuilt binaries for macOS and Linux (amd64 and arm64) are on the
+[releases page](https://github.com/codeslinger/pi-sandbox/releases).
+
+With Go installed:
+
 ```sh
 go install github.com/codeslinger/pi-sandbox@latest
 ```
