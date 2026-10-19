@@ -6,7 +6,13 @@ directory.
 - **macOS**: `sandbox-exec` (Seatbelt) with a deny-by-default profile
 - **Linux**: [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`)
 
-## Build
+## Install
+
+```sh
+go install github.com/codeslinger/pi-sandbox@latest
+```
+
+Or from a checkout:
 
 ```sh
 go build -o pi-sandbox .
